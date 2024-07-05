@@ -1,0 +1,15 @@
+[Unit]
+Description=app_slurm
+After=network.target
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/app/.env
+WorkingDirectory=/var/www/app
+ExecStart=/bin/bash -lc 'source /etc/profile.d/rvm.sh && bundle exec puma -b unix:///var/run/puma.sock -e $RAILS_ENV config.ru'
+Restart=always
+
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+---
+- hosts: all
+  become: true
+
+  roles:
+    - services
+    - postgresql
+    - nginx
+    - app
+  vars_files:
+  - group_vars/development.yml
+  
+

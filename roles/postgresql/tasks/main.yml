@@ -1,0 +1,113 @@
+---
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Add PostgreSQL GPG key
+  ansible.builtin.apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    state: present
+
+
+- name: Add PostgreSQL repository
+  apt_repository:
+    repo: "deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main"
+    state: present
+
+- name: Install PostgreSQL-15 and client
+  become: true
+  apt:
+    name:
+      - postgresql-15
+      - postgresql-client-15
+    state: present
+- name: Ensure PostgreSQL is running
+  service:
+    name: postgresql
+    state: started
+
+- name: Add listen_addresses to postgresql.conf
+  ansible.builtin.blockinfile:
+    path: /etc/postgresql/15/main/postgresql.conf
+    block: |
+      listen_addresses = '*'
+    insertafter: EOF
+
+- name: Ensure pg_hba.conf is configured for password authentication
+  become: true
+  lineinfile:
+    path: /etc/postgresql/15/main/pg_hba.conf
+    regexp: '^local\s+all\s+postgres\s+peer$'
+    line: 'local   all             postgres                                trust'
+    state: present
+
+- name: Ensure pg_hba.conf is configured for password authentication
+  become: true
+  lineinfile:
+    path: /etc/postgresql/15/main/pg_hba.conf
+    regexp: '^local\s+all\s+postgres\s+peer$'
+    line: 'local   all             all                                trust'
+    state: present
+
+- name: Ensure pg_hba.conf is configured for IPv4 connections
+  lineinfile:
+    path: /etc/postgresql/15/main/pg_hba.conf
+    regexp: '^host\s+all\s+all\s+127.0.0.1/32\s+peer$'
+    line: 'host    all             all             127.0.0.1/32            trust'
+    state: present
+  become: true
+
+- name: Reload systemd and restart PostgreSQL service
+  ansible.builtin.systemd:
+    name: postgresql
+    daemon_reload: yes
+    state: restarted
+
+- name: Ensure pg_hba.conf is configured for IPv6 connections
+  lineinfile:
+    path: /etc/postgresql/15/main/pg_hba.conf
+    regexp: '^host\s+all\s+all\s+::1/128\s+peer$'
+    line: 'host    all             all             ::1/128                 trust'
+    state: present
+  become: true
+  notify: Restart PostgreSQL
+
+
+- name: Set password for postgres user
+  become: true
+  community.postgresql.postgresql_user:
+    name: '{{ db_user}}'
+    password: '{{ db_password }}'
+    login_unix_socket: "/var/run/postgresql"
+    port: 5432
+    state: present
+  notify: Restart PostgreSQL
+
+- name: Create user
+  community.postgresql.postgresql_user:
+    name: '{{ db_user}}'
+    password: '{{ db_password }}'
+    role_attr_flags: "REPLICATION,LOGIN"
+    login_unix_socket: "/var/run/postgresql"
+    port: 5432
+    state: present
+
+
+- name: Create new db 
+  community.postgresql.postgresql_db:
+    name: '{{ db_name }}'
+    port: 5432
+    login_user: '{{ db_user }}'
+    login_password: '{{ db_password }}'
+    login_unix_socket: "/var/run/postgresql"
+    state: present
+
+
+- name: Remove test databases
+  postgresql_db:
+    name: test
+    state: absent
+    login_user: '{{ db_user }}'
+    login_password: '{{ db_password }}'
+    port: 5432
